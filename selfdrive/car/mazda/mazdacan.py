@@ -10,10 +10,10 @@ def create_steering_control(packer, CP, frame, apply_steer, lkas):
 
   # copy values from camera
   b1 = int(lkas["BIT_1"])
-  er1 = int(lkas["ERR_BIT_1"])
+  er1 = 0
   lnv = 0
   ldw = 0
-  er2 = int(lkas["ERR_BIT_2"])
+  er2 = 0
 
   # Some older models do have these, newer models don't.
   # Either way, they all work just fine if set to zero.
@@ -62,23 +62,23 @@ def create_steering_control(packer, CP, frame, apply_steer, lkas):
   return packer.make_can_msg("CAM_LKAS", 0, values)
 
 
-def create_alert_command(packer, cam_msg: dict, ldw: bool, steer_required: bool):
+def create_alert_command(packer, cam_msg: dict, ldw: bool, steer_required: bool, lkas_blocked: bool):
   values = {s: cam_msg[s] for s in [
-    "LINE_VISIBLE",
-    "LINE_NOT_VISIBLE",
-    "LANE_LINES",
     "BIT1",
     "BIT2",
     "BIT3",
     "NO_ERR_BIT",
     "S1",
     "S1_HBEAM",
+    "HANDS_WARN_3_BITS",
+    "HANDS_ON_STEER_WARN",
+    "HANDS_ON_STEER_WARN_2",
   ]}
   values.update({
     # TODO: what's the difference between all these? do we need to send all?
-    "HANDS_WARN_3_BITS": 0b111 if steer_required else 0,
-    "HANDS_ON_STEER_WARN": steer_required,
-    "HANDS_ON_STEER_WARN_2": steer_required,
+    "LINE_VISIBLE": 0 if lkas_blocked else 1,
+    "LINE_NOT_VISIBLE": 1 if lkas_blocked else 0,
+    "LANE_LINES": 1 if lkas_blocked else 2,
 
     # TODO: right lane works, left doesn't
     # TODO: need to do something about L/R
