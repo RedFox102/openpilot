@@ -70,9 +70,9 @@ def create_alert_command(packer, cam_msg: dict, ldw: bool, steer_required: bool,
     "NO_ERR_BIT",
     "S1",
     "S1_HBEAM",
-    "HANDS_WARN_3_BITS"
-    "HANDS_ON_STEER_WARN"
-    "HANDS_ON_STEER_WARN_2"
+    "HANDS_WARN_3_BITS",
+    "HANDS_ON_STEER_WARN",
+    "HANDS_ON_STEER_WARN_2",
   ]}
   values.update({
     # TODO: what's the difference between all these? do we need to send all?
