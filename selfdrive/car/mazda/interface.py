@@ -29,7 +29,7 @@ class CarInterface(CarInterfaceBase):
 
     ret.centerToFront = ret.wheelbase * 0.41
     ret.enableBsm = True
-    ret.lateralTuning.torque.latAccelOffset = -0.15
+    ret.lateralTuning.torque.latAccelOffset = 0.15
 
     return ret
 
