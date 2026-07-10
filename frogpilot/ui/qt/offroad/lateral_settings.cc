@@ -44,6 +44,7 @@ FrogPilotLateralPanel::FrogPilotLateralPanel(FrogPilotSettingsWindow *parent) : 
     {"SteerKP", parent->steerKp != 0 ? QString(tr("Kp Factor (Default: %1)")).arg(QString::number(parent->steerKp, 'f', 2)) : tr("Kp Factor"), tr("<b>How strongly openpilot corrects lane position.</b> Higher is tighter but twitchier; lower is smoother but slower. Auto-learned by default."), ""},
     {"SteerLatAccel", parent->latAccelFactor != 0 ? QString(tr("Lateral Acceleration (Default: %1)")).arg(QString::number(parent->latAccelFactor, 'f', 2)) : tr("Lateral Acceleration"), tr("<b>Maps steering torque to turning response.</b> Increase for sharper turns; decrease for gentler steering. Auto-learned by default."), ""},
     {"SteerRatio", parent->steerRatio != 0 ? QString(tr("Steer Ratio (Default: %1)")).arg(QString::number(parent->steerRatio, 'f', 2)) : tr("Steer Ratio"), tr("<b>The relationship between steering wheel rotation and road wheel angle.</b> Increase if steering feels too quick or twitchy; decrease if it feels too slow or weak. Auto-learned by default."), ""},
+    {"SteerOffset", tr("Steer Offset (Mazda Only)"), tr("<b>Compensates for a vehicle that isn't perfectly aligned and pulls to one side.</b> Positive values steer more to the right, negative values steer more to the left. Leave at 0 unless your car has a persistent alignment pull."), ""},
     {"ForceAutoTune", tr("Force Auto-Tune On"), tr("<b>Force-enable openpilot's live auto-tuning for \"Friction\" and \"Lateral Acceleration\".</b>"), ""},
     {"ForceAutoTuneOff", tr("Force Auto-Tune Off"), tr("<b>Force-disable openpilot's live auto-tuning for \"Friction\" and \"Lateral Acceleration\" and use the set value instead.</b>"), ""},
     {"ForceTorqueController", tr("Force Torque Controller"), tr("<b>Use torque-based steering control instead of angle-based control for smoother lane keeping, especially in curves.</b>"), ""},
@@ -93,6 +94,9 @@ FrogPilotLateralPanel::FrogPilotLateralPanel(FrogPilotSettingsWindow *parent) : 
     } else if (param == "SteerRatio") {
       std::vector<QString> steerRatioButton{"Reset"};
       lateralToggle = new FrogPilotParamValueButtonControl(param, title, desc, icon, parent->steerRatio * 0.5, parent->steerRatio * 1.5, QString(), std::map<float, QString>(), 0.01, false, {}, steerRatioButton, false, false);
+    } else if (param == "SteerOffset") {
+      std::vector<QString> steerOffsetButton{"Reset"};
+      lateralToggle = new FrogPilotParamValueButtonControl(param, title, desc, icon, -50, 50, QString(), std::map<float, QString>(), 1, false, {}, steerOffsetButton, false, false);
 
     } else if (param == "AlwaysOnLateral") {
       FrogPilotManageControl *aolToggle = new FrogPilotManageControl(param, title, desc, icon);
@@ -234,6 +238,14 @@ FrogPilotLateralPanel::FrogPilotLateralPanel(FrogPilotSettingsWindow *parent) : 
     if (FrogPilotConfirmationDialog::yesorno(tr("Reset <b>Steer Ratio</b> to its default value?"), this)) {
       params.putFloat("SteerRatio", parent->steerRatio);
       steerRatioToggle->refresh();
+    }
+  });
+
+  steerOffsetToggle = static_cast<FrogPilotParamValueButtonControl*>(toggles["SteerOffset"]);
+  QObject::connect(steerOffsetToggle, &FrogPilotParamValueButtonControl::buttonClicked, [this]() {
+    if (FrogPilotConfirmationDialog::yesorno(tr("Reset <b>Steer Offset</b> to its default value?"), this)) {
+      params.putFloat("SteerOffset", 0);
+      steerOffsetToggle->refresh();
     }
   });
 
@@ -414,6 +426,10 @@ void FrogPilotLateralPanel::updateToggles() {
       setVisible &= parent->hasAutoTune ? forcingAutoTuneOff : !forcingAutoTune;
       setVisible &= parent->isTorqueCar || forcingTorqueController || usingNNFF;
       setVisible &= !usingNNFF;
+    }
+
+    else if (key == "SteerOffset") {
+      setVisible &= parent->isMazda;
     }
 
     else if (key == "SteerRatio") {

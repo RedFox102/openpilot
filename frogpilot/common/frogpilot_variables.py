@@ -457,6 +457,7 @@ frogpilot_default_params: list[tuple[str, str | bytes, int, str]] = [
   ("SteerKPStock", "", 3, ""),
   ("SteerLatAccel", "", 3, ""),
   ("SteerLatAccelStock", "", 3, ""),
+  ("SteerOffset", "0", 3, "0"),
   ("SteerRatio", "", 3, ""),
   ("SteerRatioStock", "", 3, ""),
   ("StopAccel", "", 3, ""),
@@ -662,6 +663,8 @@ class FrogPilotVariables:
     toggle.use_custom_latAccelFactor = bool(round(toggle.latAccelFactor, 2) != round(latAccelFactor, 2)) and is_torque_car and not toggle.force_auto_tune or toggle.force_auto_tune_off
     toggle.steerRatio = np.clip(params.get_float("SteerRatio"), steerRatio * 0.5, steerRatio * 1.5) if advanced_lateral_tuning and toggle.tuning_level >= level["SteerRatio"] else steerRatio
     toggle.use_custom_steerRatio = bool(round(toggle.steerRatio, 2) != round(steerRatio, 2)) and not toggle.force_auto_tune or toggle.force_auto_tune_off
+    is_mazda = toggle.car_make == "mazda"
+    toggle.steerOffset = np.clip(params.get_float("SteerOffset"), -50, 50) if advanced_lateral_tuning and is_mazda and toggle.tuning_level >= level["SteerOffset"] else 0
 
     advanced_longitudinal_tuning = toggle.openpilot_longitudinal and (params.get_bool("AdvancedLongitudinalTune") if toggle.tuning_level >= level["AdvancedLongitudinalTune"] else default.get_bool("AdvancedLongitudinalTune"))
     toggle.longitudinalActuatorDelay = np.clip(params.get_float("LongitudinalActuatorDelay"), 0, 1) if advanced_longitudinal_tuning and toggle.tuning_level >= level["LongitudinalActuatorDelay"] else longitudinalActuatorDelay
