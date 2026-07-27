@@ -46,6 +46,7 @@ class ParamsLearner:
     self.yaw_rate_std = 0.0
     self.roll = 0.0
     self.steering_angle = 0.0
+    self.steering_pressed = False
     self.roll_valid = False
 
   def handle_log(self, t, which, msg):
@@ -95,11 +96,12 @@ class ParamsLearner:
 
     elif which == 'carState':
       self.steering_angle = msg.steeringAngleDeg
+      self.steering_pressed = msg.steeringPressed
       self.speed = msg.vEgo
 
       complex_dynamics = abs(msg.aEgo) > 1.0 or abs(msg.steeringRateDeg) > 20
       in_linear_region = abs(self.steering_angle) < 45
-      self.active = self.speed > MIN_ACTIVE_SPEED and in_linear_region and not complex_dynamics
+      self.active = self.speed > MIN_ACTIVE_SPEED and in_linear_region and not complex_dynamics and not self.steering_pressed
 
       if self.active:
         self.kf.predict_and_observe(t, ObservationKind.STEER_ANGLE, np.array([[math.radians(msg.steeringAngleDeg)]]))

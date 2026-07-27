@@ -77,7 +77,7 @@ class CAR(Platforms):
 
 
 class LKAS_LIMITS:
-  STEER_THRESHOLD = 15
+  STEER_THRESHOLD = 8
   DISABLE_SPEED = 45    # kph
   ENABLE_SPEED = 52     # kph
 
