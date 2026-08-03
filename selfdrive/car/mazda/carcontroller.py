@@ -24,8 +24,6 @@ class CarController(CarControllerBase):
     if CC.latActive:
       # calculate steer and also set limits due to driver torque
       new_steer = int(round(CC.actuators.steer * CarControllerParams.STEER_MAX))
-      # adjustable steer offset to compensate for slight misalignment not caught by the kalman filter
-      new_steer += int(max(-50, min(50, frogpilot_toggles.steerOffset)))
       apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last,
                                                      CS.out.steeringTorque, CarControllerParams)
 
