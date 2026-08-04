@@ -29,7 +29,7 @@ LOW_ACTIVE_SPEED = 10.0
 
 
 class ParamsLearner:
-  def __init__(self, CP, steer_ratio, stiffness_factor, angle_offset, P_initial=None):
+  def __init__(self, CP, steer_ratio, stiffness_factor, angle_offset, frogpilot_toggles, P_initial=None):
     self.kf = CarKalman(GENERATED_DIR, steer_ratio, stiffness_factor, angle_offset, P_initial)
 
     self.kf.filter.set_global("mass", CP.mass)
@@ -47,7 +47,13 @@ class ParamsLearner:
     self.roll = 0.0
     self.steering_angle = 0.0
     self.steering_pressed = False
+    self.always_on_lateral_enabled = False
     self.roll_valid = False
+
+    self.pause_aol_params_learner = frogpilot_toggles.pause_aol_params_learner
+
+  def update_frogpilot_toggles(self, frogpilot_toggles):
+    self.pause_aol_params_learner = frogpilot_toggles.pause_aol_params_learner
 
   def handle_log(self, t, which, msg):
     if which == 'liveLocationKalman':
@@ -94,6 +100,9 @@ class ParamsLearner:
         self.kf.predict_and_observe(t, ObservationKind.STIFFNESS, np.array([[stiffness]]))
         self.kf.predict_and_observe(t, ObservationKind.STEER_RATIO, np.array([[steer_ratio]]))
 
+    elif which == 'frogpilotCarState':
+      self.always_on_lateral_enabled = msg.alwaysOnLateralEnabled
+
     elif which == 'carState':
       self.steering_angle = msg.steeringAngleDeg
       self.steering_pressed = msg.steeringPressed
@@ -101,7 +110,9 @@ class ParamsLearner:
 
       complex_dynamics = abs(msg.aEgo) > 1.0 or abs(msg.steeringRateDeg) > 20
       in_linear_region = abs(self.steering_angle) < 45
-      self.active = self.speed > MIN_ACTIVE_SPEED and in_linear_region and not complex_dynamics and not self.steering_pressed
+      # Always On Lateral is steering without cruise being set
+      aol_active_without_cruise_set = self.pause_aol_params_learner and msg.cruiseState.available and self.always_on_lateral_enabled and not msg.cruiseState.enabled
+      self.active = self.speed > MIN_ACTIVE_SPEED and in_linear_region and not complex_dynamics and not self.steering_pressed and not aol_active_without_cruise_set
 
       if self.active:
         self.kf.predict_and_observe(t, ObservationKind.STEER_ANGLE, np.array([[math.radians(msg.steeringAngleDeg)]]))
@@ -128,7 +139,7 @@ def main():
   REPLAY = bool(int(os.getenv("REPLAY", "0")))
 
   pm = messaging.PubMaster(['liveParameters'])
-  sm = messaging.SubMaster(['liveLocationKalman', 'carState', 'frogpilotPlan'], poll='liveLocationKalman')
+  sm = messaging.SubMaster(['liveLocationKalman', 'carState', 'frogpilotCarState', 'frogpilotPlan'], poll='liveLocationKalman')
 
   params_reader = Params()
   # wait for stats about the car to come in from controls
@@ -178,16 +189,16 @@ def main():
   if DEBUG:
     pInitial = np.array(params['filterState']['std']) if 'filterState' in params else None
 
-  learner = ParamsLearner(CP, params['steerRatio'], params['stiffnessFactor'], math.radians(params['angleOffsetAverageDeg']), pInitial)
+  # FrogPilot variables
+  frogpilot_toggles = get_frogpilot_toggles()
+
+  learner = ParamsLearner(CP, params['steerRatio'], params['stiffnessFactor'], math.radians(params['angleOffsetAverageDeg']), frogpilot_toggles, pInitial)
   angle_offset_average = params['angleOffsetAverageDeg']
   angle_offset = angle_offset_average
   roll = 0.0
   avg_offset_valid = True
   total_offset_valid = True
   roll_valid = True
-
-  # FrogPilot variables
-  frogpilot_toggles = get_frogpilot_toggles()
 
   while True:
     sm.update()
@@ -202,7 +213,7 @@ def main():
       P = np.sqrt(learner.kf.P.diagonal())
       if not all(map(math.isfinite, x)):
         cloudlog.error("NaN in liveParameters estimate. Resetting to default values")
-        learner = ParamsLearner(CP, CP.steerRatio, 1.0, 0.0)
+        learner = ParamsLearner(CP, CP.steerRatio, 1.0, 0.0, frogpilot_toggles)
         x = learner.kf.x
 
       angle_offset_average = clip(math.degrees(x[States.ANGLE_OFFSET].item()),
@@ -267,6 +278,7 @@ def main():
     # Update FrogPilot variables
     if sm['frogpilotPlan'].togglesUpdated:
       frogpilot_toggles = get_frogpilot_toggles()
+      learner.update_frogpilot_toggles(frogpilot_toggles)
 
 if __name__ == "__main__":
   main()
