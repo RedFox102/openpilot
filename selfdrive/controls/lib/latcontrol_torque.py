@@ -56,6 +56,13 @@ class LatControlTorque(LatControl):
       output_torque = 0.0
       pid_log.active = False
     else:
+      # speed-binned torque feedforward curve for cars with the CX-5 2022+ EPS (see mazda/values.py);
+      # takes precedence over the single-fit auto-tune value every tick
+      if frogpilot_toggles.use_mazda_speed_dependent_torque:
+        self.torque_params.latAccelFactor = float(np.interp(CS.vEgo, frogpilot_toggles.mazda_torque_speed_bp, frogpilot_toggles.mazda_torque_laf_bp))
+        self.torque_params.friction = float(np.interp(CS.vEgo, frogpilot_toggles.mazda_torque_speed_bp, frogpilot_toggles.mazda_torque_friction_bp))
+        self.update_limits()
+
       measured_curvature = -VM.calc_curvature(math.radians(CS.steeringAngleDeg - params.angleOffsetDeg), CS.vEgo, params.roll)
       roll_compensation = params.roll * ACCELERATION_DUE_TO_GRAVITY
       curvature_deadzone = abs(VM.calc_curvature(math.radians(self.steering_angle_deadzone_deg), CS.vEgo, 0.0))

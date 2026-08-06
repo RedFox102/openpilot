@@ -19,7 +19,8 @@ class CarInterface(CarInterfaceBase):
 
     ret.dashcamOnly = candidate not in (CAR.MAZDA_CX5_2022, CAR.MAZDA_CX9_2021)
 
-    ret.steerActuatorDelay = 0.1
+    # command-to-torque lag is EPS firmware, so it follows the EPS, not the car body
+    ret.steerActuatorDelay = 0.14 if candidate == CAR.MAZDA_CX5_2022 else 0.1
     ret.steerLimitTimer = 0.8
 
     CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)

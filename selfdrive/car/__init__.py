@@ -89,13 +89,16 @@ def dbc_dict(pt_dbc, radar_dbc, chassis_dbc=None, body_dbc=None) -> DbcDict:
   return {'pt': pt_dbc, 'radar': radar_dbc, 'chassis': chassis_dbc, 'body': body_dbc}
 
 
-def apply_driver_steer_torque_limits(apply_torque, apply_torque_last, driver_torque, LIMITS):
+def apply_driver_steer_torque_limits(apply_torque, apply_torque_last, driver_torque, LIMITS, steer_max=None):
+  # some cars use a dynamic (e.g. speed-dependent) max steer instead of a fixed LIMITS.STEER_MAX
+  if steer_max is None:
+    steer_max = LIMITS.STEER_MAX
 
   # limits due to driver torque
-  driver_max_torque = LIMITS.STEER_MAX + (LIMITS.STEER_DRIVER_ALLOWANCE + driver_torque * LIMITS.STEER_DRIVER_FACTOR) * LIMITS.STEER_DRIVER_MULTIPLIER
-  driver_min_torque = -LIMITS.STEER_MAX + (-LIMITS.STEER_DRIVER_ALLOWANCE + driver_torque * LIMITS.STEER_DRIVER_FACTOR) * LIMITS.STEER_DRIVER_MULTIPLIER
-  max_steer_allowed = max(min(LIMITS.STEER_MAX, driver_max_torque), 0)
-  min_steer_allowed = min(max(-LIMITS.STEER_MAX, driver_min_torque), 0)
+  driver_max_torque = steer_max + (LIMITS.STEER_DRIVER_ALLOWANCE + driver_torque * LIMITS.STEER_DRIVER_FACTOR) * LIMITS.STEER_DRIVER_MULTIPLIER
+  driver_min_torque = -steer_max + (-LIMITS.STEER_DRIVER_ALLOWANCE + driver_torque * LIMITS.STEER_DRIVER_FACTOR) * LIMITS.STEER_DRIVER_MULTIPLIER
+  max_steer_allowed = max(min(steer_max, driver_max_torque), 0)
+  min_steer_allowed = min(max(-steer_max, driver_min_torque), 0)
   apply_torque = clip(apply_torque, min_steer_allowed, max_steer_allowed)
 
   # slow rate if steer torque increases in magnitude

@@ -16,6 +16,8 @@ from openpilot.selfdrive.car import gen_empty_fingerprint
 from openpilot.selfdrive.car.car_helpers import interfaces
 from openpilot.selfdrive.car.gm.values import GMFlags
 from openpilot.selfdrive.car.interfaces import TORQUE_SUBSTITUTE_PATH, CarInterfaceBase
+from openpilot.selfdrive.car.mazda.values import (MAZDA_CX5_2022_TORQUE_SPEED_BP, MAZDA_CX5_2022_TORQUE_LAT_ACCEL_BP,
+                                                  MAZDA_CX5_2022_TORQUE_FRICTION_BP)
 from openpilot.selfdrive.car.mock.values import CAR as MOCK
 from openpilot.selfdrive.car.subaru.values import SubaruFlags
 from openpilot.selfdrive.car.toyota.values import ToyotaFlags, ToyotaFrogPilotFlags
@@ -662,6 +664,13 @@ class FrogPilotVariables:
     toggle.use_custom_latAccelFactor = bool(round(toggle.latAccelFactor, 2) != round(latAccelFactor, 2)) and is_torque_car and not toggle.force_auto_tune or toggle.force_auto_tune_off
     toggle.steerRatio = np.clip(params.get_float("SteerRatio"), steerRatio * 0.5, steerRatio * 1.5) if advanced_lateral_tuning and toggle.tuning_level >= level["SteerRatio"] else steerRatio
     toggle.use_custom_steerRatio = bool(round(toggle.steerRatio, 2) != round(steerRatio, 2)) and not toggle.force_auto_tune or toggle.force_auto_tune_off
+
+    # Speed-binned torque feedforward curve for the CX-5 2022+ EPS (see mazda/values.py); overrides
+    # the single-fit auto-tune value every control tick for cars running this EPS.
+    toggle.use_mazda_speed_dependent_torque = toggle.car_model == "MAZDA_CX5_2022"
+    toggle.mazda_torque_speed_bp = MAZDA_CX5_2022_TORQUE_SPEED_BP
+    toggle.mazda_torque_laf_bp = MAZDA_CX5_2022_TORQUE_LAT_ACCEL_BP
+    toggle.mazda_torque_friction_bp = MAZDA_CX5_2022_TORQUE_FRICTION_BP
 
     advanced_longitudinal_tuning = toggle.openpilot_longitudinal and (params.get_bool("AdvancedLongitudinalTune") if toggle.tuning_level >= level["AdvancedLongitudinalTune"] else default.get_bool("AdvancedLongitudinalTune"))
     toggle.longitudinalActuatorDelay = np.clip(params.get_float("LongitudinalActuatorDelay"), 0, 1) if advanced_longitudinal_tuning and toggle.tuning_level >= level["LongitudinalActuatorDelay"] else longitudinalActuatorDelay
