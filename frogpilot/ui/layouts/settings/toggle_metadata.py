@@ -1603,6 +1603,13 @@ STEERING_TOGGLES = (
     tuning_level=1,
   ),
   ToggleDefinition(
+    title=("Pause Params Learner for Always-On-Lateral"),
+    param="PauseAOLParamsLearner",
+    description=("<b>Pause the automatic steering parameter learner while \"Always On Lateral\" is actively steering but \"Cruise Control\" is not set.</b> Useful if you keep your hands on the wheel except when cruise is set, since resting hand weight on the wheel can otherwise bias the learned steering offset."),
+    parent_param="AlwaysOnLateral",
+    tuning_level=1,
+  ),
+  ToggleDefinition(
     title=("Lane Changes"),
     param="LaneChanges",
     description=("<b>Allow openpilot to change lanes.</b>"),
