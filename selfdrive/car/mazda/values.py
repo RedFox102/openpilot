@@ -90,7 +90,9 @@ class CAR(Platforms):
   )
   MAZDA_CX5_2022 = MazdaPlatformConfig(
     [MazdaCarDocs("Mazda CX-5 2022-24")],
-    MAZDA_CX5.specs,
+    # Manually forced for a 2014 Mazda3 S Grand Touring HB with CX-5 2022 EPS
+    # TODO: Fingerprint as MAZDA_3 directly and gate the EPS tune on EPS firmware instead.
+    MazdaCarSpecs(mass=3002 * CV.LB_TO_KG, wheelbase=2.7, steerRatio=14.0),
   )
 
 
