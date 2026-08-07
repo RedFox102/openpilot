@@ -1,3 +1,5 @@
+import numpy as np
+
 from cereal import car
 from opendbc.can.packer import CANPacker
 from openpilot.selfdrive.car import apply_driver_steer_torque_limits
@@ -11,6 +13,7 @@ VisualAlert = car.CarControl.HUDControl.VisualAlert
 class CarController(CarControllerBase):
   def __init__(self, dbc_name, CP, VM):
     self.CP = CP
+    self.params = CarControllerParams(CP)
     self.apply_steer_last = 0
     self.packer = CANPacker(dbc_name)
     self.brake_counter = 0
@@ -21,11 +24,17 @@ class CarController(CarControllerBase):
 
     apply_steer = 0
 
+    # speed-dependent STEER_MAX on cars with the higher-authority EPS tune (CX-5 2022+ EPS)
+    if hasattr(self.params, "STEER_MAX_LOOKUP"):
+      steer_max = round(float(np.interp(CS.out.vEgoRaw, self.params.STEER_MAX_LOOKUP[0], self.params.STEER_MAX_LOOKUP[1])))
+    else:
+      steer_max = self.params.STEER_MAX
+
     if CC.latActive:
       # calculate steer and also set limits due to driver torque
-      new_steer = int(round(CC.actuators.steer * CarControllerParams.STEER_MAX))
+      new_steer = int(round(CC.actuators.steer * steer_max))
       apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last,
-                                                     CS.out.steeringTorque, CarControllerParams)
+                                                     CS.out.steeringTorque, self.params, steer_max)
 
     if CC.cruiseControl.cancel:
       # If brake is pressed, let us wait >70ms before trying to disable crz to avoid
@@ -60,7 +69,7 @@ class CarController(CarControllerBase):
                                                       self.frame, apply_steer, CS.cam_lkas))
 
     new_actuators = CC.actuators.as_builder()
-    new_actuators.steer = apply_steer / CarControllerParams.STEER_MAX
+    new_actuators.steer = apply_steer / steer_max
     new_actuators.steerOutputCan = apply_steer
 
     self.frame += 1

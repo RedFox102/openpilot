@@ -12,13 +12,18 @@
 #define MAZDA_AUX  1
 #define MAZDA_CAM  2
 
+// Envelope sized for the CX-5 2022+ EPS, which the controller commands up to (max_steer 1200,
+// driver_torque_factor 15 vs stock 800/1). This safety mode is per-brand and can't see which
+// EPS a given Mazda has, so this wider envelope applies to every Mazda; non-CX-5-2022-EPS cars
+// self-cap lower in the controller (values.py gates the higher-authority tune on minSteerSpeed
+// == 0), so this is only a looser backstop for them, not a behavior change.
 const SteeringLimits MAZDA_STEERING_LIMITS = {
-  .max_steer = 800,
-  .max_rate_up = 10,
+  .max_steer = 1200,
+  .max_rate_up = 12,
   .max_rate_down = 25,
-  .max_rt_delta = 300,
+  .max_rt_delta = 384,
   .max_rt_interval = 250000,
-  .driver_torque_factor = 1,
+  .driver_torque_factor = 15,
   .driver_torque_allowance = 15,
   .type = TorqueDriverLimited,
 };

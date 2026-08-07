@@ -53,7 +53,7 @@ class CarState(CarStateBase):
 
     ret.steeringAngleDeg = cp.vl["STEER"]["STEER_ANGLE"]
     ret.steeringTorque = cp.vl["STEER_TORQUE"]["STEER_TORQUE_SENSOR"]
-    ret.steeringPressed = abs(ret.steeringTorque) > LKAS_LIMITS.STEER_THRESHOLD
+    ret.steeringPressed = self.update_steering_pressed(abs(ret.steeringTorque) > LKAS_LIMITS.STEER_THRESHOLD, 5)
 
     ret.steeringTorqueEps = cp.vl["STEER_TORQUE"]["STEER_TORQUE_MOTOR"]
     ret.steeringRateDeg = cp.vl["STEER_RATE"]["STEER_ANGLE_RATE"]
@@ -99,7 +99,12 @@ class CarState(CarStateBase):
     # Check if LKAS is disabled due to lack of driver torque when all other states indicate
     # it should be enabled (steer lockout). Don't warn until we actually get lkas active
     # and lose it again, i.e, after initial lkas activation
-    ret.steerFaultTemporary = self.lkas_allowed_speed and self.lkas_blocked
+    if self.CP.minSteerSpeed > 0:
+      ret.steerFaultTemporary = self.lkas_allowed_speed and self.lkas_blocked
+    else:
+      # CX-5 2022 EPS accepts steering at all speeds regardless of LKAS_BLOCK; that signal
+      # does not indicate a real steering fault on this EPS.
+      ret.steerFaultTemporary = False
 
     self.acc_active_last = ret.cruiseState.enabled
 

@@ -13,17 +13,35 @@ Ecu = car.CarParams.Ecu
 # Steer torque limits
 
 class CarControllerParams:
-  STEER_MAX = 800                # theoretical max_steer 2047
-  STEER_DELTA_UP = 10             # torque increase per refresh
-  STEER_DELTA_DOWN = 25           # torque decrease per refresh
   STEER_DRIVER_ALLOWANCE = 15     # allowed driver torque before start limiting
-  STEER_DRIVER_MULTIPLIER = 1     # weight driver torque
   STEER_DRIVER_FACTOR = 1         # from dbc
   STEER_ERROR_MAX = 350           # max delta between torque cmd and torque motor
   STEER_STEP = 1  # 100 Hz
 
   def __init__(self, CP):
-    pass
+    # Higher-authority steering tune for cars with the CX-5 2022+ EPS (minSteerSpeed == 0
+    # marks cars with full-range, hands-off-capable steering on that EPS).
+    if CP.minSteerSpeed == 0:
+      self.STEER_MAX = 1200          # theoretical max_steer 2047; EPS clips above ceiling per speed
+      # 1200 below 32 mph for full low-speed authority, 800 above for smoother highway steering
+      self.STEER_MAX_LOOKUP = ([0., 14.2, 14.5], [1200, 1200, 800])
+      self.STEER_DELTA_UP = 12       # EPS hardware rate limit
+      self.STEER_DELTA_DOWN = 25
+      self.STEER_DRIVER_MULTIPLIER = 15   # weight driver torque (tuned for the CX-5 EPS; stock is 1)
+    else:
+      self.STEER_MAX = 800           # theoretical max_steer 2047
+      self.STEER_DELTA_UP = 10
+      self.STEER_DELTA_DOWN = 25
+      self.STEER_DRIVER_MULTIPLIER = 1    # stock
+
+
+# Empirically-learned speed-binned torque feedforward curve for the CX-5 2022+ EPS, ported from
+# zoompilot's device-learned data (opendbc torque_data/speed_dependent.toml, MAZDA_CX5_2022).
+# Fit to a CX-5 chassis, not necessarily an exact match for other bodies sharing this EPS, but a
+# much better starting point than the untuned default for any car running this motor.
+MAZDA_CX5_2022_TORQUE_SPEED_BP = [6.5, 9.5, 12.0, 16.4, 21.0, 28.0, 35.0]      # m/s
+MAZDA_CX5_2022_TORQUE_LAT_ACCEL_BP = [2.30, 2.53, 2.23, 1.09, 1.10, 1.33, 1.61]
+MAZDA_CX5_2022_TORQUE_FRICTION_BP = [0.173, 0.144, 0.147, 0.159, 0.147, 0.130, 0.108]
 
 
 @dataclass
