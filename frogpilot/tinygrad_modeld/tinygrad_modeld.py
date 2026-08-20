@@ -31,6 +31,7 @@ from openpilot.frogpilot.tinygrad_modeld.constants import ModelConstants, Plan
 from openpilot.frogpilot.tinygrad_modeld.models.commonmodel_pyx import DrivingModelFrame, CLContext
 from openpilot.frogpilot.tinygrad_modeld.runners.tinygrad_helpers import qcom_tensor_from_opencl_address
 
+from openpilot.frogpilot.common.camera_offset_helper import CameraOffsetHelper
 from openpilot.frogpilot.common.frogpilot_variables import MODELS_PATH, get_frogpilot_toggles
 
 
@@ -307,6 +308,9 @@ def main(demo=False):
   meta_main = FrameMeta()
   meta_extra = FrameMeta()
 
+  camera_offset_helper = CameraOffsetHelper()
+  camera_offset_helper.set_offset(frogpilot_toggles.camera_offset)
+
 
   if demo:
     CP = get_demo_car_params()
@@ -367,6 +371,8 @@ def main(demo=False):
       dc = DEVICE_CAMERAS[(str(sm['deviceState'].deviceType), str(sm['roadCameraState'].sensor))]
       model_transform_main = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics if main_wide_camera else dc.fcam.intrinsics, False).astype(np.float32)
       model_transform_extra = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics, True).astype(np.float32)
+      camera_height = sm["liveCalibration"].height[0] if len(sm["liveCalibration"].height) else 1.22
+      model_transform_main, model_transform_extra = camera_offset_helper.update(model_transform_main, model_transform_extra, dc, camera_height, main_wide_camera)
       live_calib_seen = True
 
     traffic_convention = np.zeros(2)
@@ -435,6 +441,7 @@ def main(demo=False):
     # Update FrogPilot variables
     if sm['frogpilotPlan'].togglesUpdated:
       frogpilot_toggles = get_frogpilot_toggles()
+      camera_offset_helper.set_offset(frogpilot_toggles.camera_offset)
 
 if __name__ == "__main__":
   try:

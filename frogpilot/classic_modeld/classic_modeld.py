@@ -24,6 +24,7 @@ from openpilot.frogpilot.classic_modeld.fill_model_msg import fill_model_msg, fi
 from openpilot.frogpilot.classic_modeld.constants import ModelConstants
 from openpilot.frogpilot.classic_modeld.models.commonmodel_pyx import ModelFrame, CLContext
 
+from openpilot.frogpilot.common.camera_offset_helper import CameraOffsetHelper
 from openpilot.frogpilot.common.frogpilot_variables import METADATAS_PATH, MODELS_PATH, get_frogpilot_toggles
 
 PROCESS_NAME = "frogpilot.classic_modeld.classic_modeld"
@@ -187,6 +188,8 @@ def main(demo=False):
   model_transform_main = np.zeros((3, 3), dtype=np.float32)
   model_transform_extra = np.zeros((3, 3), dtype=np.float32)
   live_calib_seen = False
+  camera_offset_helper = CameraOffsetHelper()
+  camera_offset_helper.set_offset(frogpilot_toggles.camera_offset)
   nav_features = np.zeros(ModelConstants.NAV_FEATURE_LEN, dtype=np.float32)
   nav_instructions = np.zeros(ModelConstants.NAV_INSTRUCTION_LEN, dtype=np.float32)
   buf_main, buf_extra = None, None
@@ -247,6 +250,8 @@ def main(demo=False):
       dc = DEVICE_CAMERAS[(str(sm['deviceState'].deviceType), str(sm['roadCameraState'].sensor))]
       model_transform_main = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics if main_wide_camera else dc.fcam.intrinsics, False).astype(np.float32)
       model_transform_extra = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics, True).astype(np.float32)
+      camera_height = sm["liveCalibration"].height[0] if len(sm["liveCalibration"].height) else 1.22
+      model_transform_main, model_transform_extra = camera_offset_helper.update(model_transform_main, model_transform_extra, dc, camera_height, main_wide_camera)
       live_calib_seen = True
 
     traffic_convention = np.zeros(2)
@@ -340,6 +345,7 @@ def main(demo=False):
     # Update FrogPilot variables
     if sm['frogpilotPlan'].togglesUpdated:
       frogpilot_toggles = get_frogpilot_toggles()
+      camera_offset_helper.set_offset(frogpilot_toggles.camera_offset)
 
 if __name__ == "__main__":
   try:

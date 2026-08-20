@@ -193,6 +193,7 @@ frogpilot_default_params: list[tuple[str, str | bytes, int, str]] = [
   ("BorderMetrics", "0", 3, "0"),
   ("CalibratedLateralAcceleration", str(DEFAULT_LATERAL_ACCELERATION), 2, str(DEFAULT_LATERAL_ACCELERATION)),
   ("CalibrationProgress", "0", 3, "0"),
+  ("CameraOffset", "0", 3, "0"),
   ("CameraView", "3", 2, "0"),
   ("CarMake", "", 0, ""),
   ("CarModel", "", 0, ""),
@@ -664,6 +665,9 @@ class FrogPilotVariables:
     toggle.use_custom_latAccelFactor = bool(round(toggle.latAccelFactor, 2) != round(latAccelFactor, 2)) and is_torque_car and not toggle.force_auto_tune or toggle.force_auto_tune_off
     toggle.steerRatio = np.clip(params.get_float("SteerRatio"), steerRatio * 0.5, steerRatio * 1.5) if advanced_lateral_tuning and toggle.tuning_level >= level["SteerRatio"] else steerRatio
     toggle.use_custom_steerRatio = bool(round(toggle.steerRatio, 2) != round(steerRatio, 2)) and not toggle.force_auto_tune or toggle.force_auto_tune_off
+    # Camera offset in meters, sheared into the vision model's warp matrix (see camera_offset_helper.py).
+    # Positive shifts the perceived viewpoint right, so the car tracks further left; negative the opposite.
+    toggle.camera_offset = float(np.clip(params.get_float("CameraOffset"), -0.35, 0.35)) if advanced_lateral_tuning and toggle.tuning_level >= level["CameraOffset"] else 0.0
 
     # Speed-binned torque feedforward curve for the CX-5 2022+ EPS (see mazda/values.py); overrides
     # the single-fit auto-tune value every control tick for cars running this EPS.

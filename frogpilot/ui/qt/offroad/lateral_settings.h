@@ -24,7 +24,7 @@ private:
 
   std::map<QString, AbstractControl*> toggles;
 
-  QSet<QString> advancedLateralTuneKeys = {"ForceAutoTune", "ForceAutoTuneOff", "ForceTorqueController", "SteerDelay", "SteerFriction", "SteerLatAccel", "SteerKP", "SteerRatio"};
+  QSet<QString> advancedLateralTuneKeys = {"CameraOffset", "ForceAutoTune", "ForceAutoTuneOff", "ForceTorqueController", "SteerDelay", "SteerFriction", "SteerLatAccel", "SteerKP", "SteerRatio"};
   QSet<QString> aolKeys = {"AlwaysOnLateralLKAS", "AlwaysOnLateralMain", "PauseAOLOnBrake"};
   QSet<QString> laneChangeKeys = {"LaneChangeTime", "LaneDetectionWidth", "MinimumLaneChangeSpeed", "NudgelessLaneChange", "OneLaneChange"};
   QSet<QString> lateralTuneKeys = {"NNFF", "NNFFLite", "TurnDesires"};
@@ -32,6 +32,7 @@ private:
 
   QSet<QString> parentKeys;
 
+  FrogPilotParamValueButtonControl *cameraOffsetToggle;
   FrogPilotParamValueButtonControl *steerDelayToggle;
   FrogPilotParamValueButtonControl *steerFrictionToggle;
   FrogPilotParamValueButtonControl *steerLatAccelToggle;

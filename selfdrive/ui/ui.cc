@@ -45,11 +45,12 @@ int get_path_length_idx(const cereal::XYZTData::Reader &line, const float path_h
 }
 
 void update_leads(UIState *s, const cereal::RadarState::Reader &radar_state, const cereal::XYZTData::Reader &line) {
+  float camera_offset = frogpilotUIState()->frogpilot_toggles.value("camera_offset").toDouble();
   for (int i = 0; i < 2; ++i) {
     const auto &lead_data = (i == 0) ? radar_state.getLeadOne() : radar_state.getLeadTwo();
     if (lead_data.getStatus()) {
       float z = line.getZ()[get_path_length_idx(line, lead_data.getDRel())];
-      calib_frame_to_full_frame(s, lead_data.getDRel(), -lead_data.getYRel(), z + 1.22, &s->scene.lead_vertices[i]);
+      calib_frame_to_full_frame(s, lead_data.getDRel(), -lead_data.getYRel() + camera_offset, z + 1.22, &s->scene.lead_vertices[i]);
     }
   }
 }
@@ -93,6 +94,10 @@ void update_radar_tracks(capnp::List<cereal::LiveTracks>::Reader &tracks_msg, ce
 
 void update_line_data(const UIState *s, const cereal::XYZTData::Reader &line,
                       float y_off, float z_off, QPolygonF *pvd, int max_idx, bool allow_invert=true) {
+  // model outputs are in the camera-offset-sheared frame; shift them back so the drawn
+  // path/lanes line up with the un-sheared camera view (see camera_offset_helper.py)
+  float camera_offset = frogpilotUIState()->frogpilot_toggles.value("camera_offset").toDouble();
+
   const auto line_x = line.getX(), line_y = line.getY(), line_z = line.getZ();
   QPointF left, right;
   pvd->clear();
@@ -100,8 +105,8 @@ void update_line_data(const UIState *s, const cereal::XYZTData::Reader &line,
     // highly negative x positions  are drawn above the frame and cause flickering, clip to zy plane of camera
     if (line_x[i] < 0) continue;
 
-    bool l = calib_frame_to_full_frame(s, line_x[i], line_y[i] - y_off, line_z[i] + z_off, &left);
-    bool r = calib_frame_to_full_frame(s, line_x[i], line_y[i] + y_off, line_z[i] + z_off, &right);
+    bool l = calib_frame_to_full_frame(s, line_x[i], line_y[i] + camera_offset - y_off, line_z[i] + z_off, &left);
+    bool r = calib_frame_to_full_frame(s, line_x[i], line_y[i] + camera_offset + y_off, line_z[i] + z_off, &right);
     if (l && r) {
       // For wider lines the drawn polygon will "invert" when going over a hill and cause artifacts
       if (!allow_invert && pvd->size() && left.y() > pvd->back().y()) {
