@@ -1,9 +1,13 @@
+from collections import deque
+
+import numpy as np
+
 from opendbc.can import CANPacker
 from opendbc.car import Bus, structs
 from opendbc.car.lateral import apply_driver_steer_torque_limits
 from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.mazda import mazdacan
-from opendbc.car.mazda.values import CarControllerParams, Buttons
+from opendbc.car.mazda.values import CarControllerParams, Buttons, MazdaFlags
 
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
 
@@ -14,17 +18,47 @@ class CarController(CarControllerBase):
     self.apply_torque_last = 0
     self.packer = CANPacker(dbc_names[Bus.pt])
     self.brake_counter = 0
+    self.params = CarControllerParams(CP)
+    # The non-delivery latch belongs to the steer-to-zero firmware alone.
+    self.steer_to_zero = bool(CP.flags & MazdaFlags.STEER_TO_ZERO_EPS)
+    self.driver_torque_samples: deque[float] = deque(maxlen=self.params.STEER_DRIVER_SAMPLES)
 
   def update(self, CC, CS, now_nanos, starpilot_toggles):
     can_sends = []
+
+    self.driver_torque_samples.append(CS.out.steeringTorque)
+    if CS.lkas_rejected:
+      # The panda reports every 0x243 it refused back on the can stream (src 192). A rejection
+      # zeroes its rate-limit reference, so a controller that keeps ramping is refused on every
+      # later frame and the EPS loses its stream. Only a command within one step of zero is
+      # accepted next, so the ramp restarts there.
+      self.apply_torque_last = 0
 
     apply_torque = 0
 
     if CC.latActive:
       # calculate steer and also set limits due to driver torque
-      new_torque = int(round(CC.actuators.torque * CarControllerParams.STEER_MAX))
+      new_torque = int(round(CC.actuators.torque * self.params.STEER_MAX))
+
+      # Clamp to applied EPS authority so controlsd can detect saturation. Keep this separate
+      # from STEER_MAX because the torque parameters are expressed on STEER_MAX.
+      eps_ceiling = round(float(np.interp(CS.out.vEgoRaw, self.params.EPS_CEILING_LOOKUP[0],
+                                          self.params.EPS_CEILING_LOOKUP[1])))
+      new_torque = int(np.clip(new_torque, -eps_ceiling, eps_ceiling))
+
+      # Use the worst sample plus margin to stay inside panda's fresher driver-torque envelope.
+      if new_torque >= 0:
+        driver_torque = min(self.driver_torque_samples) - self.params.STEER_DRIVER_MARGIN
+      else:
+        driver_torque = max(self.driver_torque_samples) + self.params.STEER_DRIVER_MARGIN
+
       apply_torque = apply_driver_steer_torque_limits(new_torque, self.apply_torque_last,
-                                                      CS.out.steeringTorque, CarControllerParams)
+                                                      driver_torque, self.params)
+
+    # Stop requesting torque while carstate says the EPS will not take it: after the
+    # non-delivery latch, or through its first engagement of the cycle. Recovery ramps from zero.
+    if self.steer_to_zero and (CS.steer_undelivered or CS.steer_first_engage_hold):
+      apply_torque = 0
 
     if CC.cruiseControl.cancel:
       # If brake is pressed, let us wait >70ms before trying to disable crz to avoid
@@ -59,7 +93,7 @@ class CarController(CarControllerBase):
                                                       self.frame, apply_torque, CS.cam_lkas))
 
     new_actuators = CC.actuators.as_builder()
-    new_actuators.torque = apply_torque / CarControllerParams.STEER_MAX
+    new_actuators.torque = apply_torque / self.params.STEER_MAX
     new_actuators.torqueOutputCan = apply_torque
 
     self.frame += 1

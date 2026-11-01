@@ -53,6 +53,17 @@ class CurvatureSteeringLimits:
     return float(np.clip(new_apply_curvature, -self.CURVATURE_MAX, self.CURVATURE_MAX))
 
 
+def get_tune_scale(CP) -> float:
+  """How far the brand's carcontroller STEER_MAX sits from the one upstream-fitted torque values
+  (params.toml, NNFF models, the manual override) are expressed on: a latAccelFactor is multiplied
+  by it and a friction or an NN torque divided by it. 1.0 when the brand declares no TUNE_SCALE."""
+  try:
+    ccp = __import__(f'opendbc.car.{CP.brand}.values', fromlist=['CarControllerParams']).CarControllerParams
+  except (ImportError, AttributeError):
+    return 1.0
+  return float(getattr(ccp, 'TUNE_SCALE', 1.0))
+
+
 def apply_driver_steer_torque_limits(apply_torque: int, apply_torque_last: int, driver_torque: float, LIMITS, steer_max: int = None):
   # some safety modes utilize a dynamic max steer
   if steer_max is None:

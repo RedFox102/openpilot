@@ -16,6 +16,7 @@ from opendbc.car.chrysler.values import pacifica_hybrid_aol_stock_acc_mode
 from opendbc.car.gm.values import CAR as GM_CAR
 from opendbc.car.honda.values import CAR as HONDA_CAR
 from opendbc.car.hyundai.values import CAR as HYUNDAI_CAR
+from opendbc.car.lateral import get_tune_scale
 from opendbc.car.nissan.values import CAR as NISSAN_CAR
 from opendbc.car.vehicle_model import VehicleModel
 from openpilot.selfdrive.controls.lib.drive_helpers import (
@@ -371,10 +372,12 @@ def get_torque_control_params(CP, torque_params, starpilot_toggles, use_live_par
     if not use_custom_friction:
       friction = torque_params.frictionCoefficientFiltered
 
+  # The manual override is typed on upstream's STEER_MAX, like params.toml's tunes.
+  tune_scale = get_tune_scale(CP)
   if use_custom_lat_accel:
-    lat_accel_factor = starpilot_toggles.latAccelFactor
+    lat_accel_factor = starpilot_toggles.latAccelFactor * tune_scale
   if use_custom_friction:
-    friction = starpilot_toggles.friction
+    friction = starpilot_toggles.friction / tune_scale
 
   return lat_accel_factor, lat_accel_offset, friction
 

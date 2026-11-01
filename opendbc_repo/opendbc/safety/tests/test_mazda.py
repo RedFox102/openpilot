@@ -2,6 +2,7 @@
 import unittest
 
 from opendbc.car.structs import CarParams
+from opendbc.car.mazda.values import CarControllerParams, MazdaSafetyFlags
 from opendbc.safety.tests.libsafety import libsafety_py
 import opendbc.safety.tests.common as common
 from opendbc.safety.tests.common import CANPackerSafety
@@ -84,6 +85,26 @@ class TestMazdaSafety(common.CarSafetyTest, common.DriverTorqueSteeringSafetyTes
     # CRZ_CTRL, CRZ_AVAILABLE is the main on button
     values = {"CRZ_AVAILABLE": 1 if toggle_on else 0}
     return self.packer.make_can_msg_panda("CRZ_CTRL", 0, values)
+
+
+class TestMazdaEpsHwSafety(TestMazdaSafety):
+  # The measured EPS envelope the interface sets on every Mazda. Numbers come from the car side so
+  # the controller and panda cannot drift apart: a panda max_rate_down above the controller's
+  # STEER_DELTA_DOWN rejects every frame of a driver-override winddown.
+  MAX_RATE_UP = CarControllerParams.STEER_DELTA_UP
+  MAX_RATE_DOWN = CarControllerParams.STEER_DELTA_DOWN
+  MAX_TORQUE_LOOKUP = [0], [CarControllerParams.EPS_STEER_MAX]
+
+  MAX_RT_DELTA = 384
+
+  DRIVER_TORQUE_ALLOWANCE = CarControllerParams.STEER_DRIVER_ALLOWANCE
+  DRIVER_TORQUE_FACTOR = CarControllerParams.STEER_DRIVER_MULTIPLIER
+
+  def setUp(self):
+    self.packer = CANPackerSafety("mazda_2017")
+    self.safety = libsafety_py.libsafety
+    self.safety.set_safety_hooks(CarParams.SafetyModel.mazda, MazdaSafetyFlags.EPS_HW)
+    self.safety.init_tests()
 
 
 if __name__ == "__main__":

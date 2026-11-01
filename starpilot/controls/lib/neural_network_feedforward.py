@@ -10,6 +10,7 @@ from difflib import SequenceMatcher
 
 from cereal import log
 from opendbc.car.hyundai.values import CAR as HYUNDAI_CAR
+from opendbc.car.lateral import get_tune_scale
 from openpilot.common.constants import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.params import Params
@@ -183,6 +184,8 @@ class LatControlNNFF(LatControl):
     super().__init__(CP, CI, dt)
     self.lat_torque_nn_model = get_nn_model(CP.carFingerprint, str(next((fw.fwVersion for fw in CP.carFw if fw.ecu == "eps"), "")).replace("\\", ""))
     self.nnff_loaded = self.lat_torque_nn_model is not None
+    # NNFF models output torque on upstream's STEER_MAX (1/1.5 on the Mazda EPS envelope).
+    self.nn_torque_scale = 1.0 / get_tune_scale(CP)
 
     self.torque_params = CP.lateralTuning.torque.as_builder()
     self.pid = PIDController(1.0, 0.3, 0.0, pos_limit=self.steer_max, neg_limit=-self.steer_max, rate=1/self.dt)
@@ -330,6 +333,10 @@ class LatControlNNFF(LatControl):
           # apply friction override for cars with low NN friction response
           if self.nn_friction_override:
             pid_log.error += self.torque_from_lateral_accel(0.0, self.torque_params)
+
+          # The models were trained on upstream's STEER_MAX; rescale their torque to this car's.
+          pid_log.error *= self.nn_torque_scale
+          ff *= self.nn_torque_scale
         else:
           torque_from_measurement = self.torque_from_lateral_accel(measurement, self.torque_params)
           torque_from_setpoint = self.torque_from_lateral_accel(setpoint, self.torque_params)

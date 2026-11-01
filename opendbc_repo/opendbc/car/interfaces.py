@@ -203,7 +203,8 @@ class CarInterfaceBase(ABC):
       any(getattr(starpilot_toggles, toggle, False) for toggle in toggles_to_check) or
       modified_civic_force_torque
     ):
-      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      # cls: a brand may override configure_torque_tune to convert params.toml onto its own scale.
+      cls.configure_torque_tune(candidate, ret.lateralTuning)
 
     return ret
 

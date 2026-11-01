@@ -5,6 +5,7 @@ from collections import deque, defaultdict
 
 import cereal.messaging as messaging
 from cereal import car, log
+from opendbc.car.lateral import get_tune_scale
 from openpilot.common.constants import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.params import Params
 from openpilot.common.realtime import config_realtime_process, DT_MDL
@@ -75,6 +76,8 @@ class TorqueEstimator(ParameterEstimator):
     self.offline_latAccelFactor = 0.0
     self.resets = 0.0
     self.use_params = CP.brand in ALLOWED_CARS and CP.lateralTuning.which() == 'torque'
+    # The manual override is typed on upstream's STEER_MAX, like params.toml's tunes.
+    self.tune_scale = get_tune_scale(CP)
 
     if CP.lateralTuning.which() == 'torque':
       self.offline_friction = CP.lateralTuning.torque.friction
@@ -232,9 +235,11 @@ class TorqueEstimator(ParameterEstimator):
     if with_points:
       liveTorqueParameters.points = self.filtered_points.get_points()[:, [0, 2]].tolist()
 
-    liveTorqueParameters.latAccelFactorFiltered = float(self.filtered_params['latAccelFactor'].x if not self.starpilot_toggles.use_custom_latAccelFactor else self.starpilot_toggles.latAccelFactor)
+    liveTorqueParameters.latAccelFactorFiltered = float(self.filtered_params['latAccelFactor'].x if not self.starpilot_toggles.use_custom_latAccelFactor
+                                                        else self.starpilot_toggles.latAccelFactor * self.tune_scale)
     liveTorqueParameters.latAccelOffsetFiltered = float(self.filtered_params['latAccelOffset'].x)
-    liveTorqueParameters.frictionCoefficientFiltered = float(self.filtered_params['frictionCoefficient'].x if not self.starpilot_toggles.use_custom_friction else self.starpilot_toggles.friction)
+    liveTorqueParameters.frictionCoefficientFiltered = float(self.filtered_params['frictionCoefficient'].x if not self.starpilot_toggles.use_custom_friction
+                                                             else self.starpilot_toggles.friction / self.tune_scale)
     liveTorqueParameters.totalBucketPoints = len(self.filtered_points)
     liveTorqueParameters.calPerc = self.filtered_points.get_valid_percent()
     liveTorqueParameters.decay = self.decay

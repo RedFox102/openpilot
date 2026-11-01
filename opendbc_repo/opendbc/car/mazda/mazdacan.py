@@ -10,10 +10,10 @@ def create_steering_control(packer, CP, frame, apply_torque, lkas):
 
   # copy values from camera
   b1 = int(lkas["BIT_1"])
-  er1 = 0
+  er1 = int(lkas["ERR_BIT_1"])
   lnv = 0
   ldw = 0
-  er2 = 0
+  er2 = int(lkas["ERR_BIT_2"])
 
   # Some older models do have these, newer models don't.
   # Either way, they all work just fine if set to zero.

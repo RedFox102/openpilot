@@ -5,6 +5,7 @@ from opendbc.car.chrysler.values import RAM_DT
 from opendbc.car.gm.values import CAR as GM_CAR, GMFlags, SDGM_CAR
 from opendbc.car.hyundai.values import CAR as HYUNDAI_CAR
 from opendbc.car.interfaces import MAX_CTRL_SPEED
+from opendbc.car.mazda.values import MazdaFlags
 from opendbc.car.rivian.values import RivianFlags
 
 from openpilot.selfdrive.selfdrived.events import Events
@@ -67,6 +68,10 @@ class CarSpecificEvents:
     self.gm_low_speed_alert_shown = False
     self.no_steer_warning = False
     self.silent_steer_warning = True
+    # steerFaultTemporary on the steer-to-zero Mazda EPS is the non-delivery latch reporting a
+    # sustained road-speed block. The latch has already zeroed the command, so there is nothing
+    # for a soft disable to protect: keep the banner, drop the escalation.
+    self.mazda_silent_steer_fault = self.CP.brand == "mazda" and bool(self.CP.flags & MazdaFlags.STEER_TO_ZERO_EPS)
     self.rivian = self.CP.brand == "rivian"
     self.rivian_angle_harness = self.rivian and bool(self.CP.flags & RivianFlags.ANGLE_HARNESS)
     self.rivian_status_frame = 0
@@ -296,7 +301,8 @@ class CarSpecificEvents:
         self.no_steer_warning = False
 
         # if the user overrode recently, show a less harsh alert
-        if self.silent_steer_warning or CS.standstill or self.steering_unpressed < int(1.5 / DT_CTRL):
+        if self.silent_steer_warning or CS.standstill or self.steering_unpressed < int(1.5 / DT_CTRL) or \
+           self.mazda_silent_steer_fault:
           self.silent_steer_warning = True
           events.add(EventName.steerTempUnavailableSilent)
         else:
