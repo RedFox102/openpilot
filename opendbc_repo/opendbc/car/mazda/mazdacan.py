@@ -70,11 +70,14 @@ def create_alert_command(packer, cam_msg: dict, ldw: bool, steer_required: bool,
     "NO_ERR_BIT",
     "S1",
     "S1_HBEAM",
-    "HANDS_WARN_3_BITS",
-    "HANDS_ON_STEER_WARN",
-    "HANDS_ON_STEER_WARN_2",
   ]}
   values.update({
+    # Never send the hands-on-wheel alert: clusters on cars that did not ship with LKAS have no such
+    # alert and show a dashboard warning instead. Neither openpilot's nor the camera's is forwarded.
+    "HANDS_WARN_3_BITS": 0,
+    "HANDS_ON_STEER_WARN": 0,
+    "HANDS_ON_STEER_WARN_2": 0,
+
     # TODO: what's the difference between all these? do we need to send all?
     "LINE_VISIBLE": 0 if lkas_blocked else 1,
     "LINE_NOT_VISIBLE": 1 if lkas_blocked else 0,
