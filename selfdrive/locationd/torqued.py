@@ -11,6 +11,7 @@ from openpilot.common.realtime import config_realtime_process, DT_MDL
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.locationd.helpers import PointBuckets, ParameterEstimator, PoseCalibrator, Pose
+from openpilot.selfdrive.locationd.speed_bin_learner import SPEED_BINS_SERVICE, SpeedBinLearner
 
 from openpilot.starpilot.common.starpilot_variables import get_starpilot_toggles
 
@@ -52,8 +53,9 @@ class TorqueBuckets(PointBuckets):
         break
 
 
-class TorqueEstimator(ParameterEstimator):
+class TorqueEstimator(ParameterEstimator, SpeedBinLearner):
   def __init__(self, CP, decimated=False, track_all_points=False):
+    self.CP = CP
     self.hist_len = int(HISTORY / DT_MDL)
     self.lag = 0.0
     self.track_all_points = track_all_points  # for offline analysis, without max lateral accel or max steer torque filters
@@ -124,6 +126,9 @@ class TorqueEstimator(ParameterEstimator):
     self.filtered_params = {}
     for param in initial_params:
       self.filtered_params[param] = FirstOrderFilter(initial_params[param], self.decay, DT_MDL)
+
+    # after the sanity bounds and the global restore: the bins share torqued's cache key and decay
+    self.init_speed_bins()
 
   @staticmethod
   def get_restore_key(CP, version):
@@ -204,6 +209,10 @@ class TorqueEstimator(ParameterEstimator):
           if self.track_all_points:
             self.all_torque_points.append([steer, lateral_acc])
 
+        # the speed bins take every speed, so their low bins learn below MIN_VEL
+        if all(lat_active) and not any(steer_override) and (abs(steer) > STEER_MIN_THRESHOLD) and (abs(lateral_acc) <= LAT_ACC_THRESHOLD):
+          self.add_speed_bin_point(steer, lateral_acc, vego)
+
   def get_msg(self, valid=True, with_points=False):
     msg = messaging.new_message('liveTorqueParameters')
     msg.valid = valid
@@ -247,7 +256,7 @@ def main(demo=False):
 
   DEBUG = bool(int(os.getenv("DEBUG", "0")))
 
-  pm = messaging.PubMaster(['liveTorqueParameters'])
+  pm = messaging.PubMaster(['liveTorqueParameters', SPEED_BINS_SERVICE])
   sm = messaging.SubMaster(['carControl', 'carOutput', 'carState', 'liveCalibration', 'livePose', 'liveDelay'], poll='livePose')
 
   params = Params()
@@ -273,11 +282,13 @@ def main(demo=False):
     # 4Hz driven by livePose
     if sm.frame % 5 == 0:
       pm.send('liveTorqueParameters', estimator.get_msg(valid=sm.all_checks(), with_points=DEBUG))
+      pm.send(SPEED_BINS_SERVICE, estimator.get_speed_bins_msg(valid=sm.all_checks()))
 
     # Cache points every 60 seconds while onroad
     if sm.frame % 240 == 0:
       msg = estimator.get_msg(valid=sm.all_checks(), with_points=True)
       params.put_nonblocking("LiveTorqueParameters", msg.to_bytes())
+      estimator.write_speed_bins_cache(estimator.get_speed_bins_msg(valid=sm.all_checks(), with_points=True))
 
     estimator.starpilot_toggles = get_starpilot_toggles(sm)
 

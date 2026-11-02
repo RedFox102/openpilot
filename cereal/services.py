@@ -104,6 +104,7 @@ _services: dict[str, tuple] = {
   "livestreamDriverEncodeData": (False, 20., None, QueueSize.MEDIUM),
   "customReserved9": (True, 0., 1),
   "starpilotLateralState": (True, 100., 10),
+  "customReserved16": (True, 4., 1),  # speed-binned torque params, published by torqued
   "customReservedRawData0": (True, 0.),
   "customReservedRawData1": (True, 0.),
   "customReservedRawData2": (True, 0.),

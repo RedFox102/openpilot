@@ -3,6 +3,7 @@ import math
 from numbers import Number
 import os
 import time
+import numpy as np
 
 from cereal import car, custom, log
 import cereal.messaging as messaging
@@ -42,6 +43,7 @@ from openpilot.selfdrive.controls.lib.longcontrol import LongControl
 from openpilot.selfdrive.car.cruise_state import should_cancel_stock_cruise
 from openpilot.selfdrive.modeld.modeld import LAT_SMOOTH_SECONDS, get_car_lateral_smooth_seconds
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
+from openpilot.selfdrive.locationd.speed_bin_learner import SPEED_BINS_SERVICE
 
 from openpilot.starpilot.common.starpilot_variables import get_starpilot_toggles
 from openpilot.starpilot.controls.lib.neural_network_feedforward import LatControlNNFF
@@ -379,6 +381,26 @@ def get_torque_control_params(CP, torque_params, starpilot_toggles, use_live_par
   return lat_accel_factor, lat_accel_offset, friction
 
 
+def get_speed_bin_torque_params(speed_bins, v_ego: float, lat_accel_factor: float, friction: float, starpilot_toggles) -> tuple[float, float]:
+  """The latAccelFactor and friction torqued's speed bins give at v_ego, in place of its global fit.
+  A manually set value keeps priority over its bin, as it does over the global fit. Anything but a
+  complete, finite, positive table keeps the values passed in."""
+  centers = list(speed_bins.speedBinCenters)
+  lafs = list(speed_bins.speedBinLatAccelFactors)
+  frictions = list(speed_bins.speedBinFrictions)
+  if not centers or len(lafs) != len(centers) or len(frictions) != len(centers):
+    return lat_accel_factor, friction
+  values = np.array(centers + lafs + frictions, dtype=float)
+  if not np.all(np.isfinite(values)) or min(lafs) <= 0 or min(frictions) < 0 or np.any(np.diff(centers) <= 0):
+    return lat_accel_factor, friction
+
+  if not getattr(starpilot_toggles, "use_custom_latAccelFactor", False):
+    lat_accel_factor = float(np.interp(v_ego, centers, lafs))
+  if not getattr(starpilot_toggles, "use_custom_friction", False):
+    friction = float(np.interp(v_ego, centers, frictions))
+  return lat_accel_factor, friction
+
+
 class Controls:
   def __init__(self) -> None:
     self.params = Params()
@@ -392,7 +414,8 @@ class Controls:
     self.sm = messaging.SubMaster(['liveDelay', 'liveParameters', 'liveTorqueParameters', 'modelV2', 'selfdriveState',
                                    'liveCalibration', 'livePose', 'longitudinalPlan', 'lateralManeuverPlan', 'carState', 'carOutput',
                                    'starpilotCarControl',
-                                   'driverMonitoringState', 'onroadEvents', 'driverAssistance', 'radarState'], poll='selfdriveState')
+                                   'driverMonitoringState', 'onroadEvents', 'driverAssistance', 'radarState', SPEED_BINS_SERVICE],
+                                  poll='selfdriveState')
     self.pm = messaging.PubMaster(['carControl', 'controlsState', 'starpilotLateralState'])
 
     self.steer_limited_by_safety = False
@@ -499,6 +522,10 @@ class Controls:
       )
       if use_live_params or use_custom_torque_params:
         lat_accel_factor, lat_accel_offset, friction = get_torque_control_params(self.CP, torque_params, self.starpilot_toggles, use_live_params)
+        # torqued's speed bins, where the car has a table, replace its global fit while they are current
+        if use_live_params and self.sm.alive[SPEED_BINS_SERVICE] and self.sm.valid[SPEED_BINS_SERVICE]:
+          lat_accel_factor, friction = get_speed_bin_torque_params(self.sm[SPEED_BINS_SERVICE], CS.vEgo, lat_accel_factor, friction,
+                                                                   self.starpilot_toggles)
         self.LaC.update_live_torque_params(lat_accel_factor, lat_accel_offset, friction)
 
     long_plan = self.sm['longitudinalPlan']

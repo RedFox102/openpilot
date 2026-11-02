@@ -1,4 +1,6 @@
+import functools
 import math
+import os
 import numpy as np
 from dataclasses import dataclass
 from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, structs, rate_limit, DT_CTRL
@@ -62,6 +64,47 @@ def get_tune_scale(CP) -> float:
   except (ImportError, AttributeError):
     return 1.0
   return float(getattr(ccp, 'TUNE_SCALE', 1.0))
+
+
+@functools.cache
+def get_speed_dep_config():
+  """speed_dependent.toml, with each 'substitute' entry resolved to the table it borrows (its own
+  keys override). Cached after the first call."""
+  import tomllib
+  from opendbc.car.common.basedir import BASEDIR
+  with open(os.path.join(BASEDIR, 'torque_data', 'speed_dependent.toml'), 'rb') as f:
+    cfg = tomllib.load(f)
+  for name, entry in cfg.items():
+    if 'substitute' in entry:
+      cfg[name] = {**cfg[entry['substitute']], **{k: v for k, v in entry.items() if k != 'substitute'}}
+  return cfg
+
+
+def get_speed_dep_config_for_car(CP) -> dict:
+  """The speed-dependent torque entry for this car, {} when it has none.
+
+  An entry measured behind a steer-to-zero EPS (an EPS-swapped car) declares
+  requires_steer_to_zero: the same model on its stock EPS steers only above a floor, through the
+  firmware's own dead band, so it gets no entry. minSteerSpeed == 0 is the brand-neutral statement
+  that the EPS steers to a stop. An entry that stays active for a car with a floor loses the bins
+  centered below it, and 'min_speed' keeps the first remaining bin's lower edge where the full
+  table puts it."""
+  cfg = get_speed_dep_config().get(CP.carFingerprint, {})
+  if cfg.get('requires_steer_to_zero') and CP.minSteerSpeed > 0:
+    return {}
+  cfg = dict(cfg)
+  if cfg and CP.minSteerSpeed > 0 and 'speed_bp' in cfg:
+    centers = cfg['speed_bp']
+    keep = [i for i, v in enumerate(centers) if v >= CP.minSteerSpeed]
+    if keep and keep[0] > 0:
+      cfg['min_speed'] = (centers[keep[0] - 1] + centers[keep[0]]) / 2
+    for key in ('speed_bp', 'laf_bp', 'friction_bp'):
+      if key in cfg:
+        if keep:
+          cfg[key] = [cfg[key][i] for i in keep]
+        else:
+          del cfg[key]
+  return cfg
 
 
 def apply_driver_steer_torque_limits(apply_torque: int, apply_torque_last: int, driver_torque: float, LIMITS, steer_max: int = None):

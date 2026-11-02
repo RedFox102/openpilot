@@ -336,7 +336,19 @@ struct CustomReserved14 @0xb057204d7deadf3f {
 struct CustomReserved15 @0xbd443b539493bc68 {
 }
 
+# Speed-binned torque learning (from zoompilot), published by torqued beside every
+# liveTorqueParameters at the same cadence and validity. The struct keeps its reserved name so
+# log.capnp stays upstream's.
 struct CustomReserved16 @0xfc6241ed8877b611 {
+  version @0 :Int32;               # torqued VERSION, keys the cache restore with CarParamsPrevRoute
+  speedBinCenters @1 :List(Float32);
+  speedBinLatAccelFactors @2 :List(Float32);
+  speedBinFrictions @3 :List(Float32);
+  speedBinValid @4 :List(Bool);
+  # cache-only: empty on the published message; the per-bin buckets are thousands of
+  # points and only the restore path reads them
+  speedBinPoints @5 :List(List(List(Float32)));
+  seedVersion @6 :Int32;           # speed_dependent.toml seed_version the bins were learned under
 }
 
 struct MapdDownloadLocationDetails @0xff889853e7b0987f {
