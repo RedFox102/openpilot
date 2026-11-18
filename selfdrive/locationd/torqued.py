@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import threading
 import numpy as np
 from collections import deque, defaultdict
 
@@ -251,6 +252,23 @@ class TorqueEstimator(ParameterEstimator, SpeedBinLearner):
     return msg
 
 
+def save_caches(params, estimator, msg, points, bins_msg, bin_points):
+  # This thread inherits torqued's SCHED_FIFO priority 5, above sensord's 1 on the shared cores,
+  # and converting thousands of points took 100-150 ms: long enough to delay the IMU samples past
+  # locationd's 100 ms timing check. At normal priority sensord preempts it.
+  if hasattr(os, "sched_setscheduler"):
+    try:
+      os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
+    except OSError:
+      cloudlog.exception("torqued: failed to lower cache save priority")
+
+  msg.liveTorqueParameters.points = points.tolist()
+  params.put("LiveTorqueParameters", msg.to_bytes())
+  if bin_points is not None:
+    getattr(bins_msg, SPEED_BINS_SERVICE).speedBinPoints = [p.tolist() for p in bin_points]
+    estimator.write_speed_bins_cache(bins_msg, blocking=True)
+
+
 def main(demo=False):
   config_realtime_process([0, 1, 2, 3], 5)
 
@@ -271,6 +289,7 @@ def main(demo=False):
 
   estimator.starpilot_toggles = starpilot_toggles
 
+  save_thread = None
   while True:
     sm.update()
     if sm.all_checks():
@@ -284,11 +303,15 @@ def main(demo=False):
       pm.send('liveTorqueParameters', estimator.get_msg(valid=sm.all_checks(), with_points=DEBUG))
       pm.send(SPEED_BINS_SERVICE, estimator.get_speed_bins_msg(valid=sm.all_checks()))
 
-    # Cache points every 60 seconds while onroad
-    if sm.frame % 240 == 0:
-      msg = estimator.get_msg(valid=sm.all_checks(), with_points=True)
-      params.put_nonblocking("LiveTorqueParameters", msg.to_bytes())
-      estimator.write_speed_bins_cache(estimator.get_speed_bins_msg(valid=sm.all_checks(), with_points=True))
+    # Cache points every 12 seconds while onroad. Only the numpy snapshots are taken here; the
+    # list conversion and serialization run in save_caches at normal priority.
+    if sm.frame % 240 == 0 and (save_thread is None or not save_thread.is_alive()):
+      msg = estimator.get_msg(valid=sm.all_checks())
+      points = estimator.filtered_points.get_points()[:, [0, 2]]
+      bins_msg = estimator.get_speed_bins_msg(valid=sm.all_checks())
+      bin_points = [bucket.get_points()[:, [0, 2]] for bucket in estimator.speed_bin_points] if estimator.speed_binned else None
+      save_thread = threading.Thread(target=save_caches, args=(params, estimator, msg, points, bins_msg, bin_points), daemon=True)
+      save_thread.start()
 
     estimator.starpilot_toggles = get_starpilot_toggles(sm)
 
