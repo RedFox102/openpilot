@@ -7,7 +7,7 @@ from opendbc.car import Bus, structs
 from opendbc.car.lateral import apply_driver_steer_torque_limits
 from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.mazda import mazdacan
-from opendbc.car.mazda.values import CarControllerParams, Buttons, MazdaFlags
+from opendbc.car.mazda.values import CarControllerParams, MazdaFlags
 
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
 
@@ -17,7 +17,6 @@ class CarController(CarControllerBase):
     super().__init__(dbc_names, CP)
     self.apply_torque_last = 0
     self.packer = CANPacker(dbc_names[Bus.pt])
-    self.brake_counter = 0
     self.params = CarControllerParams(CP)
     # The non-delivery latch belongs to the steer-to-zero firmware alone.
     self.steer_to_zero = bool(CP.flags & MazdaFlags.STEER_TO_ZERO_EPS)
@@ -60,20 +59,9 @@ class CarController(CarControllerBase):
     if self.steer_to_zero and (CS.steer_undelivered or CS.steer_first_engage_hold):
       apply_torque = 0
 
-    if CC.cruiseControl.cancel:
-      # If brake is pressed, let us wait >70ms before trying to disable crz to avoid
-      # a race condition with the stock system, where the second cancel from openpilot
-      # will disable the crz 'main on'. crz ctrl msg runs at 50hz. 70ms allows us to
-      # read 3 messages and most likely sync state before we attempt cancel.
-      self.brake_counter = self.brake_counter + 1
-      if self.frame % 10 == 0 and not (CS.out.brakePressed and self.brake_counter < 7):
-        # Cancel Stock ACC if it's enabled while OP is disengaged
-        # Send at a rate of 10hz until we sync with stock ACC state
-        can_sends.append(mazdacan.create_button_cmd(self.packer, self.CP, CS.crz_btns_counter, Buttons.CANCEL))
-    else:
-      self.brake_counter = 0
-      # RES is never sent. It does nothing on cars without stop and go, and every injected
-      # CRZ_BTNS takes the counter of the driver's next real frame from the wheel.
+    # No CRZ_BTNS is ever sent, neither CANCEL nor RES. Every injected frame takes the counter of
+    # the driver's next real frame from the wheel, and injected CANCELs were causing cruise faults.
+    # Need to determine the root cause before we can start injecting the cruise cancel command.
 
     self.apply_torque_last = apply_torque
 
